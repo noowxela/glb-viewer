@@ -7,6 +7,10 @@ import {
   frameObject,
   getGltfLoader,
 } from "@/lib/gltf";
+import {
+  bakeStudioEnvironment,
+  createStudioLightformerScene,
+} from "@/lib/studioEnvironment";
 
 export type ModelSource =
   | { kind: "url"; url: string }
@@ -21,6 +25,7 @@ export interface ViewerHandle {
 interface ModelViewerProps {
   source: ModelSource | null;
   autoRotate: boolean;
+  studioEnv?: boolean;
   onProgress?: (ratio: number) => void;
   onLoaded?: () => void;
   onError?: (message: string) => void;
@@ -30,6 +35,7 @@ interface ModelViewerProps {
 export default function ModelViewer({
   source,
   autoRotate,
+  studioEnv = false,
   onProgress,
   onLoaded,
   onError,
@@ -47,6 +53,13 @@ export default function ModelViewer({
     position: THREE.Vector3;
     target: THREE.Vector3;
   } | null>(null);
+  const pmremRef = useRef<THREE.PMREMGenerator | null>(null);
+  const roomEnvMapRef = useRef<THREE.Texture | null>(null);
+  const studioEnvMapRef = useRef<THREE.Texture | null>(null);
+  const studioSceneRef = useRef<THREE.Scene | null>(null);
+  const gridRef = useRef<THREE.Object3D | null>(null);
+  const groundRef = useRef<THREE.Object3D | null>(null);
+  const defaultBgRef = useRef(new THREE.Color(0xeceff3));
   const [sceneReady, setSceneReady] = useState(false);
   const callbacksRef = useRef({ onProgress, onLoaded, onError, onReady });
 
@@ -57,7 +70,7 @@ export default function ModelViewer({
     if (!container) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xeceff3);
+    scene.background = defaultBgRef.current.clone();
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(
@@ -95,7 +108,14 @@ export default function ModelViewer({
     rendererRef.current = renderer;
 
     const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmremRef.current = pmrem;
+    const roomMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    roomEnvMapRef.current = roomMap;
+    scene.environment = roomMap;
+
+    const { scene: studioScene } = createStudioLightformerScene();
+    studioSceneRef.current = studioScene;
+    studioEnvMapRef.current = bakeStudioEnvironment(renderer, pmrem, studioScene);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
@@ -119,10 +139,12 @@ export default function ModelViewer({
     ground.position.y = -0.001;
     ground.receiveShadow = true;
     scene.add(ground);
+    groundRef.current = ground;
 
     const grid = new THREE.GridHelper(12, 24, 0xcbd5e1, 0xe2e8f0);
     grid.position.y = -0.002;
     scene.add(grid);
+    gridRef.current = grid;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -188,6 +210,11 @@ export default function ModelViewer({
       window.removeEventListener("resize", handleResize);
       controls.dispose();
       pmrem.dispose();
+      roomEnvMapRef.current?.dispose();
+      studioEnvMapRef.current?.dispose();
+      roomEnvMapRef.current = null;
+      studioEnvMapRef.current = null;
+      studioSceneRef.current = null;
       if (modelRef.current) {
         scene.remove(modelRef.current);
         disposeObject(modelRef.current);
@@ -199,14 +226,54 @@ export default function ModelViewer({
       cameraRef.current = null;
       rendererRef.current = null;
       controlsRef.current = null;
+      pmremRef.current = null;
+      gridRef.current = null;
+      groundRef.current = null;
       setSceneReady(false);
     };
-    // Scene is created once; autoRotate is synced separately.
   }, []);
 
   useEffect(() => {
     controlsRef.current && (controlsRef.current.autoRotate = autoRotate);
   }, [autoRotate]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!sceneReady || !scene) return;
+
+    const grid = gridRef.current;
+    const ground = groundRef.current;
+
+    if (studioEnv) {
+      const map = studioEnvMapRef.current;
+      if (map) {
+        scene.environment = map;
+        scene.background = map;
+        scene.backgroundBlurriness = 0.7;
+        scene.backgroundIntensity = 1.1;
+        scene.environmentIntensity = 1.4;
+      }
+      if (grid) grid.visible = false;
+      if (ground) ground.visible = false;
+      if (rendererRef.current) {
+        rendererRef.current.toneMappingExposure = 1.25;
+      }
+    } else {
+      const map = roomEnvMapRef.current;
+      if (map) {
+        scene.environment = map;
+        scene.background = defaultBgRef.current.clone();
+        scene.backgroundBlurriness = 0;
+        scene.backgroundIntensity = 1;
+        scene.environmentIntensity = 1;
+      }
+      if (grid) grid.visible = true;
+      if (ground) ground.visible = true;
+      if (rendererRef.current) {
+        rendererRef.current.toneMappingExposure = 1.05;
+      }
+    }
+  }, [studioEnv, sceneReady]);
 
   useEffect(() => {
     const scene = sceneRef.current;

@@ -3,6 +3,7 @@ import {
   FolderOpen,
   RotateCcw,
   RotateCw,
+  Sparkles,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -40,6 +41,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [autoRotate, setAutoRotate] = useState(true);
+  const [studioEnv, setStudioEnv] = useState(false);
   const [dragging, setDragging] = useState(false);
 
   const progressLabel = useMemo(
@@ -127,6 +129,15 @@ export default function Home() {
               {autoRotate ? "Spinning" : "Spin"}
             </Button>
             <Button
+              variant={studioEnv ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setStudioEnv((value) => !value)}
+              title="Toggle studio environment lighting"
+            >
+              <Sparkles className="size-4" />
+              {studioEnv ? "Studio on" : "Studio"}
+            </Button>
+            <Button
               variant="outline"
               size="sm"
               onClick={() => viewerRef.current?.resetView()}
@@ -158,6 +169,7 @@ export default function Home() {
         <ModelViewer
           source={source}
           autoRotate={autoRotate}
+          studioEnv={studioEnv}
           onReady={(handle) => {
             viewerRef.current = handle;
           }}

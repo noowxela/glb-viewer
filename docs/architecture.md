@@ -38,6 +38,7 @@ Production (optional)
 | `client/src/pages/` | Routes: Home, NotFound |
 | `client/src/components/ModelViewer.tsx` | Three.js viewer |
 | `client/src/lib/gltf.ts` | Load / dispose / frame helpers |
+| `client/src/lib/studioEnvironment.ts` | Lightformer showroom PMREM (studio toggle) |
 | `client/src/components/ui/` | shadcn primitives |
 | `server/` | Production static file server only (no API) |
 | `shared/` | Shared TS placeholders (minimal) |
